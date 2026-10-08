@@ -1,0 +1,16 @@
+{
+  "name": "ayushya-patel",
+  "owner": {
+    "name": "Ayushya Patel"
+  },
+  "metadata": {
+    "description": "Claude Code plugins by Ayushya Patel."
+  },
+  "plugins": [
+    {
+      "name": "ai-workflow",
+      "source": "./",
+      "description": "A spec-first engineering workflow for Claude Code: spec, plan, tasks, verify, commit, PR, guard hooks and a shared law."
+    }
+  ]
+}

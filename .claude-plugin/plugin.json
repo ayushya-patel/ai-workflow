@@ -1,0 +1,9 @@
+{
+  "name": "ai-workflow",
+  "displayName": "AI workflow",
+  "version": "1.0.0",
+  "description": "A spec-first engineering workflow for Claude Code: triage A/B/C, spec, plan, tasks, contracts and change folders, then verify, commit and PR, with guard hooks and a short law every repo follows.",
+  "author": {
+    "name": "Ayushya Patel"
+  }
+}
