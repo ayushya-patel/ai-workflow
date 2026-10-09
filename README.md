@@ -7,7 +7,7 @@ dispatches them.
 
 | Part | What |
 |---|---|
-| `skills/` | `/ai-workflow:task` (fires on "build / fix / change X"), `spec`, `plan`, `tasks`, `check`, `flow`, `status`, `adr`, `verify`, `review`, `commit`, `create-pr`, `handoff`, `doc-sweep`, `self-improve` |
+| `skills/` | `/ai-workflow:task` (fires on "build / fix / change X"), `spec`, `plan`, `tasks`, `check`, `flow`, `status`, `adr`, `verify`, `review`, `commit`, `create-pr`, `handoff`, `doc-sweep`, `self-improve`, `architecture-diagrams` (one-screen HTML/SVG architecture diagrams from a generator that refuses to emit colliding geometry) |
 | `agents/` | `ai-workflow:guardian` (the law, on a diff), `ai-workflow:code-reviewer`, `ai-workflow:spec-auditor` (for `/check`, `/status`), `ai-workflow:task-implementer` (one task each, pinned to `claude-sonnet-5-5`), `ai-workflow:failure-triager` (read-only judge of browser checks that still fail) |
 | `hooks/` | `guard-bash`, `guard-edit`, `guard-new-code`, `format`, `session-start`, `detect-feedback` — see [Hooks](#hooks) |
 | `law/` | `constitution.md`, `definition-of-done.md`, `engineering-discipline.md` |
