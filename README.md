@@ -63,6 +63,21 @@ Then, per repo:
 4. Add the CI gate — see [The CI gate](#the-ci-gate).
 5. Remove the repo's old copies of the skills, agents and hooks this plugin replaces.
 
+### Just the `architecture-diagrams` skill
+
+It has no dependency on the rest of the plugin, so it can be installed on its own — no
+hooks, no workflow:
+
+```sh
+git clone https://github.com/ayushya-patel/ai-workflow /tmp/ai-workflow
+cp -R /tmp/ai-workflow/skills/architecture-diagrams ~/.claude/skills/
+```
+
+Restart Claude Code, then ask for an architecture diagram or run `/architecture-diagrams`.
+It needs **Python 3.12+** (`python3 --version`; macOS's bundled 3.9 fails), Google Chrome for
+its screenshot check, and network the first time a brand logo is used. Update by re-running
+the two commands.
+
 ## `.claude/ai-workflow.json`
 
 Every key is optional. A missing or unreadable file means the defaults; the hooks never
@@ -226,3 +241,10 @@ review.
    up on the next marketplace update (`/plugin marketplace update ayushya-patel`).
 
 Changing a constitution article also needs an ADR (see Article III).
+
+## Author
+
+Built by [Ayushya Patel](https://github.com/ayushya-patel), who got tired of AI agents
+confidently shipping code nobody had specified, and wrote down the process that stopped it.
+Everything in here — the law, the guards, the learning loop — was earned on real projects
+before it was written down. Issues and PRs are welcome.
