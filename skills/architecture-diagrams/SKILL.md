@@ -12,9 +12,19 @@ and each screenshot fix breaks something else. **Generate the diagram from a nod
 emit if the geometry is wrong.** The bundled `diagram.gen.py` does this; copy it, edit its CONTENT section,
 run it. It exits 1 with a list of collisions instead of writing bad HTML.
 
+## Requirements
+
+- **Python 3.12+** — the generator uses f-string syntax older versions reject. Check with `python3 --version`.
+- **Google Chrome** — only for the screenshot check in step 4.
+- **Network on first use of a brand logo** — fetched once from jsDelivr into `~/.cache/architecture-diagrams/icons`
+  (override with `ICON_CACHE`). Offline, an auto-matched logo falls back to the generic icon; a forced `brand=` fails.
+
+Installs either with the `ai-workflow` plugin or on its own: copy this folder to `~/.claude/skills/architecture-diagrams/`.
+
 ## Workflow
 
-1. `cp ${CLAUDE_PLUGIN_ROOT}/skills/architecture-diagrams/diagram.gen.py <project>/assets/<name>.gen.py`
+1. `cp <this skill's base directory>/diagram.gen.py <project>/assets/<name>.gen.py` (the directory this
+   `SKILL.md` was loaded from: the plugin's `skills/architecture-diagrams/`, or `~/.claude/skills/architecture-diagrams/`)
 2. Replace the **CONTENT** section only (nodes, arrows, labels, regions, legend, titles, `VW/VH`). Everything
    outside it is style + validator; if you find yourself editing it, the template is missing a feature — add it
    there as a parameter, not as a one-off hack.
