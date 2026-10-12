@@ -1,0 +1,3 @@
+# Gitleaks default rules with no allowlist: the audited repo's .gitleaks.toml is never used.
+[extend]
+useDefault = true

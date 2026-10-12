@@ -7,14 +7,15 @@ dispatches them.
 
 | Part | What |
 |---|---|
-| `skills/` | `/ai-workflow:task` (fires on "build / fix / change X"), `spec`, `plan`, `tasks`, `check`, `flow`, `status`, `adr`, `verify`, `review`, `commit`, `create-pr`, `handoff`, `doc-sweep`, `self-improve`, `architecture-diagrams` (one-screen HTML/SVG architecture diagrams from a generator that refuses to emit colliding geometry) |
-| `agents/` | `ai-workflow:guardian` (the law, on a diff), `ai-workflow:code-reviewer`, `ai-workflow:spec-auditor` (for `/check`, `/status`), `ai-workflow:task-implementer` (one task each, pinned to `claude-sonnet-5-5`), `ai-workflow:failure-triager` (read-only judge of browser checks that still fail) |
-| `hooks/` | `guard-bash`, `guard-edit`, `guard-new-code`, `format`, `session-start`, `detect-feedback` — see [Hooks](#hooks) |
+| `skills/` | `/ai-workflow:task` (fires on "build / fix / change X"), `spec`, `plan`, `tasks`, `check`, `flow`, `status`, `adr`, `verify`, `review`, `commit`, `create-pr`, `handoff`, `doc-sweep`, `self-improve`, `security-audit` (read-only full-depth audit; law, checklists and chain catalogue under `skills/security-audit/`), `architecture-diagrams` (one-screen HTML/SVG architecture diagrams from a generator that refuses to emit colliding geometry) |
+| `agents/` | `ai-workflow:guardian` (the law, on a diff), `ai-workflow:code-reviewer`, `ai-workflow:spec-auditor` (for `/check`, `/status`), `ai-workflow:task-implementer` (one task each, pinned to `claude-sonnet-5-5`), `ai-workflow:failure-triager` (read-only judge of browser checks that still fail); for `/security-audit`: surface hunters `security-backend`, `security-injection`, `security-client`, `security-infra`, `security-supply-chain`, `security-ai`, the adversarial `security-verifier`, and `security-reviewer` (diff mode, for `verify_agents`) |
+| `hooks/` | `guard-bash`, `guard-edit`, `guard-new-code`, `format`, `session-start`, `detect-feedback`, `guard-audit` — see [Hooks](#hooks) |
 | `law/` | `constitution.md`, `definition-of-done.md`, `engineering-discipline.md` |
-| `templates/` | `specs/_template/` (spec, plan, tasks, contracts/provides+requires, changes/), `adr.md`, `delivery-note.md`, `handoff.md`, `learnings.md` |
+| `templates/` | `specs/_template/` (spec, plan, tasks, contracts/provides+requires, changes/), `adr.md`, `delivery-note.md`, `handoff.md`, `learnings.md`, `security-report.md` |
 | `scripts/pipeline/` | Plain Node (builtins only, no dependency): `cli-waves.mjs <module-dir>` prints a task list's parallel waves, `cli-brief.mjs <module-dir> <task-id>` prints one task's context for its implementer. Deterministic, no model call — see [The task pipeline](#the-task-pipeline) |
+| `scripts/security/audit.mjs` | Plain Node (builtins only) for `/security-audit`: preflight, inventory, masked grep/show/diff/render, redacted secret and hidden-Unicode sweeps, installed scanners run offline and projected to `rule · path:line`, stable IDs |
 | `ci/check-process.sh` | CI gate: no application code without a spec touched (Article I), no new runtime dependency without an ADR (Article IV) |
-| `tests/` | Self-checks: `bash tests/test-guard-new-code.sh`, `bash tests/test-check-process.sh`, and the pipeline scripts' tests, `node --test tests/*.test.mjs` |
+| `tests/` | Self-checks: `bash tests/test-guard-new-code.sh`, `bash tests/test-check-process.sh`, and the Node tests (pipeline scripts, security helper and guard), `node --test tests/*.test.mjs` |
 
 ## The process in one picture
 
@@ -124,6 +125,52 @@ input, means "allow" / "say nothing". Exit 2 is the only blocking code.
 | `format` | PostToolUse · Edit/Write | Runs the repo's formatter on the edited file. |
 | `session-start` | SessionStart | Always prints `law/engineering-discipline.md`, so the law applies outside `/ai-workflow:task` too. Then: pending `.claude/learnings.md` entries (count + up to 5), an active `.claude/skip-process`, a leftover legacy `.claude/pending-retrospect.md`, and — where `code` is set — the open specs. |
 | `detect-feedback` | UserPromptSubmit | When a prompt reads like a correction ("no,", "don't", "from now on", …), one line asking Claude to log it in `.claude/learnings.md`. Silent otherwise. |
+| `guard-audit` | PreToolUse · Bash/Read/Grep/Glob/Edit/Write/Web/MCP | Only inside `ai-workflow:security-*` agents (keyed on `agent_type`; a no-op everywhere else). Enforces the security-audit law: Bash allowlist, no edits, no network or MCP, no secret files, files holding secret-format values only through masked `audit.mjs show`. |
+
+## Security audit
+
+`/ai-workflow:security-audit [full | diff [base] | <path>] [--surface backend,client,infra,supply-chain,ai] [--network]`
+
+Runs a read-only audit across backend, frontend, browser extensions, mobile and desktop, infra and IaC, Kubernetes and containers, CI/CD, supply chain, secrets and AI/LLM/MCP. The default scope is the full repo, including git history.
+
+How it runs:
+1. Preflight.
+2. Inventory and a short threat model.
+3. Six surface agents hunt in parallel against `skills/security-audit/checklists/`.
+4. `ai-workflow:security-verifier` tries to disprove every candidate.
+5. Variants and attack chains.
+6. One confidential report, printed to the conversation.
+
+Each finding carries:
+- a stable `SA-` id;
+- severity (E×I) and confidence;
+- the exact target (`path:line`, resource address, workflow step, route);
+- the attacker and the trace;
+- the attack;
+- a code-level fix with out-of-band steps;
+- a regression test.
+
+Every rule id in the coverage matrix ends up clean (with its evidence), partial, a finding, N/A, or not checked with a reason.
+
+Safety (`skills/security-audit/law.md`, enforced on every security agent by `hooks/guard-audit.mjs`):
+- **No secret is ever printed.** Secrets show as type, place, a 4-character prefix and the length only. Files holding secret-format values can only be read masked.
+- **No network.** No web, MCP, connector or Artifact calls, and no live hosts. `--network` only downloads the public osv advisory database.
+- **No repo code runs and no tools are installed.** Scanners run only if already installed, offline, with repo ignore files disabled, and their output is projected to `rule · path:line`.
+- **No edits.** Fixes go one finding at a time through `/ai-workflow:task`.
+
+Limits:
+- The guard covers the agents, which do the reading. The orchestrating skill runs in your session unguarded (a skill hook would stay on for the rest of the session) and follows the law in prose, reaching repo content only through `audit.mjs`.
+- Content the auditor reads still lands in this machine's session transcripts.
+- For an untrusted repo, run from `claude --setting-sources user` or a container. Preflight asks when the repo's own hooks or MCP servers are live.
+
+Suppressions live in `.claude/security-suppressions.json`: `[{ "id", "reason", "owner", "expires" }]`.
+- The reason and an expiry are required, at most 180 days out (30 for CRITICAL).
+- Diff mode honours only the base version, and changing the file is a FAIL.
+- Every applied suppression is printed.
+
+For a security check on every change in `/ai-workflow:verify`, add `ai-workflow:security-reviewer` to `verify_agents`. It FAILs CRITICAL and HIGH findings the change introduces or touches, CONFIRMED MEDIUM findings, new secrets and suppression changes. Pre-existing issues appear as PASS notes.
+
+Learning: agents report `Setup feedback:` lines and the skill logs them as `pending` entries in `.claude/learnings.md` (false-positive patterns, checklist gaps, guard or scanner errors) for `/ai-workflow:self-improve`. Entries describe the audit's mistake, never the audited repo's weaknesses.
 
 ## The task pipeline
 
@@ -163,7 +210,8 @@ One loop for every repo, so a mistake gets fixed once instead of repeated:
    `templates/learnings.md`). Written the moment a correction or lesson happens, and by
    `/ai-workflow:task`'s retrospective, which also appends a short dated summary to
    `docs/retrospective.md` when the repo has one. Subagents report `Setup feedback:`
-   lines; the main session logs them.
+   lines; the main session logs them. `/ai-workflow:security-audit` logs
+   its own lessons (false-positive patterns, checklist gaps) the same way, never a finding.
 2. **Nudge** — `detect-feedback`.
 3. **Surface** — `session-start` reports the pending count; nothing at zero.
 4. **Fix** — `/ai-workflow:self-improve`: strongest fix first (enforcement beats a rule,
