@@ -1,0 +1,6 @@
+const express = require("express")
+const app = express()
+app.use(express.urlencoded({ extended: true }))
+app.use("/password", require("./routes/password"))
+app.use("/verify", require("./routes/verify"))
+app.listen(3000)

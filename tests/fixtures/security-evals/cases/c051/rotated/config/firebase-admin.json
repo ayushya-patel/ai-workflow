@@ -1,0 +1,6 @@
+{
+  "type": "admin_sdk",
+  "project_id": "acme-sync-prod",
+  "client_email": "sync@acme-sync-prod.example.com",
+  "private_key": "{{SECRET:pem}}"
+}

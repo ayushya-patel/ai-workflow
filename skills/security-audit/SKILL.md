@@ -25,10 +25,19 @@ node ${CLAUDE_PLUGIN_ROOT}/scripts/security/audit.mjs preflight
 ```
 
 - `ERROR` or `STOP`: print the lines and stop.
-- `ASK`: stop and ask whether this repo is the user's own. Untrusted → tell them to
-  rerun from `claude --setting-sources user` or a container, and stop. Record the answer.
+- `ASK`: the repo's own settings or MCP servers are live if this session loaded project
+  settings (the helper only sees the files). Stop and ask whether this repo is the
+  user's own. Untrusted → tell them to rerun from `claude --setting-sources user` or a
+  container, and stop — unless they state this session already runs that way: then
+  continue. Record the answer.
 - `PLUGIN <path>` is `<plugin>` from here on: the absolute path every command and
-  dispatch uses. `TOOLS` and `MISSING` go in the report header.
+  dispatch uses.
+- `TOOL <name> ok <version> | BROKEN | MISSING | SKIPPED shim` is a smoke test (a
+  version call from an empty temp dir, killed at 5 s), not a PATH check; a
+  version-manager shim is never run (it reads the repo's tool-version files). `LAYERS`
+  goes in the report header; a layer is `N/A` when no file needs it (SAST per language);
+  a BROKEN or MISSING layer makes every rule it would corroborate `partial`, never clean. `RESTORE` lines go in the report
+  footer only when a layer is degraded — recommended, never run.
 
 Arguments:
 
@@ -45,7 +54,11 @@ Arguments:
   Report what the diff introduces or touches; a CRITICAL or HIGH already present in a
   changed file is reported and tagged `pre-existing`. Suppressions come from the base
   version only (law §9). A change under a vendored path gets every checklist for its
-  language, flagged `modified vendored code`.
+  language, flagged `modified vendored code`. Whatever the diff size, any change under
+  `.github/`, CI files, build files (`*.m4`, `configure*`, `CMakeLists.txt`, gradle
+  wrapper), lockfiles adding a package name, `*.pth`, agent settings or instruction
+  files, `.vscode/` or `.gitmodules` goes to the supply-chain or AI agent, read in full;
+  a new third-party action or dependency is a LEAD.
 - `<path>`: files under it, plus one hop of what they import and what imports them.
 - `--surface a,b`: only those inventory surfaces (`backend` runs both backend agents);
   the rest are `not checked — excluded by argument`.
@@ -76,10 +89,13 @@ node <plugin>/scripts/security/audit.mjs scan gitleaks        # then --history, 
 
 From `inventory`:
 
+- `IOC` lines first: an exact indicator of a known compromise. Send them to the
+  supply-chain agent; confirmed, it opens the report as **Suspected compromise**.
 - Surface counts; an empty surface is `N/A — no files`, never PASS.
-- `UNCLASSIFIED`, `BINARY`, `NATIVE`, `LFS` and `SUBMODULE` feed **Not audited**.
+- `UNCLASSIFIED`, `BINARY`, `NATIVE`, `LFS`, `SUBMODULE`, `unicode`'s `NOT-UTF8 …
+  skipped (binary)` and any helper's `TOO-LARGE` lines feed **Not audited**.
 - `SYMLINK … OUTSIDE ROOT`, `ODD-NAME`, `SCANNER-CONFIG` and `SECRET-FILE` are leads
-  for the supply-chain agent.
+  for the supply-chain agent; `AGENT-CASE` for the AI agent.
 
 The `path:line` of every `secrets` hit becomes `redact-lines` for every hunter.
 
@@ -90,14 +106,17 @@ to look, never what is true:
   HTTP clients, parsers, template engines, LLM SDKs, deploy target.
 - **Entry-point files and counts:** app entry, router and middleware files, server-action
   and API-route directories, GraphQL schema, gRPC services, consumers, cron, webhooks, LLM
-  tool registrations, MCP servers, CI workflows. Hunters map each entry point themselves.
+  tool registrations, MCP servers, CI workflows and local actions (and other branches'
+  copies: `audit.mjs workflows`, read with `audit.mjs at <ref> <path>`). Hunters map
+  each entry point themselves and return one `ENTRY` line each.
 - **Where controls live:** auth middleware and its order, CSRF, CORS, header config
   (app, proxy, CDN in IaC), validation library, sanitizer, logger redaction, tenant key.
 - **What reaches production:** env layering (per-env tfvars, `values-prod.yaml`,
   overlays, production settings).
 - **History seeds:** `git log --oneline -i -E
   --grep='cve|secur|vuln|xss|inject|sanitiz|csrf|ssrf|leak|auth' | head -50`. Each past
-  fix seeds variant analysis on its surface.
+  fix seeds variant analysis on its surface. The supply-chain agent also runs the
+  `cicd.backdoor` history pass (who changed workflows, lockfiles and build files, and how).
 
 Shard any surface with more than ~400 files or ~60 entry points by top-level package or
 service, one agent per shard.
@@ -145,7 +164,7 @@ Each dispatch prompt carries:
   passed, and the history seeds for its surface.
 - `redact-lines`.
 - Supply-chain only: the `secrets`, `unicode` and `scan` output and the inventory lead
-  lines, so it classifies them instead of re-running.
+  and `IOC` lines, so it classifies them instead of re-running.
 
 An agent that is missing or returns `ERROR law not loaded` is `not checked` in coverage.
 A `TRUNCATED` return is re-sharded once. If either remains, the verdict is `incomplete`.
@@ -178,9 +197,10 @@ One more verifier spot-checks the `clean` COVERAGE lines of `authz.missing`,
 disputed `clean` becomes `partial`, and any candidate it raises goes through this step.
 
 The verifier returns `KEEP` (confidence, recomputed severity, corrected fields, the
-controls it found, extra locations) or `DROP` (reason). Report only KEEP. Never restore a
-DROP yourself. If you hold evidence the verifier missed, send it back once with that
-evidence and accept the second answer.
+controls it found, extra locations) or `DROP` (reason). Report only KEEP, and list every
+DROP in the drop log with its rule, `path:line` and reason, so a killed true positive
+stays visible. Never restore a DROP yourself. If you hold evidence the verifier missed,
+send it back once with that evidence and accept the second answer.
 
 ## 6. IDs, variants, chains
 
@@ -204,6 +224,16 @@ Fill `<plugin>/templates/security-report.md` § Report and print it here. Write 
 to disk. Every rule id of every checklist that ran appears in coverage as clean (with its
 evidence), partial, a finding, N/A, or not checked with the reason. Silence is never
 mistaken for safety.
+
+- **Ledger:** merge the hunters' `ENTRY` lines into `Entry points traced: N/M`, naming
+  every untraced one. An untraced anonymous or crown-jewel entry point appends
+  `incomplete: entry points` to the verdict.
+- **Fix first:** one line under the verdict — the cheapest hop of the worst chain, else
+  the CONFIRMED finding with the highest E×I and widest blast radius.
+- **Outside the repo:** list the controls the findings depend on that the repo can't
+  show (template § Verify outside the repo), never as a downgrade.
+- **High-blast components:** the `deps.vulnerable` line per component, even when
+  `not checked`.
 
 Verdict:
 

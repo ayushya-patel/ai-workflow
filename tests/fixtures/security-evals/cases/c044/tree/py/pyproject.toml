@@ -1,0 +1,6 @@
+[project]
+name = "acme-tools"
+version = "4.1.2"
+
+[tool.setuptools.data-files]
+"." = ["src/acme_tools/acme_tools_init.pth"]

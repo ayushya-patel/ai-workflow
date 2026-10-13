@@ -1,0 +1,321 @@
+{
+  "version": 1,
+  "match": { "unit": "rule+file+line", "window": 3 },
+  "cases": [
+    {
+      "id": "c001", "surface": "backend", "verdict": "BLOCK", "fix_first": ["c001-bola"],
+      "expect": [
+        { "key": "c001-bola", "rule": "authz.bola", "alt_rules": ["authz.tenant"], "severity": ["HIGH", "CRITICAL"],
+          "source_file": "src/routes/orders.ts",
+          "at": [{ "file": "src/repo/orders.ts", "anchor": "findUnique({ where: { id } })" }, { "file": "src/routes/orders.ts", "anchor": "getOrder(Number(req.params.id))" }] }
+      ]
+    },
+    {
+      "id": "c002", "surface": "backend", "verdict": "PASS",
+      "decoys": [{ "key": "c002-d", "rule": "authz.bola", "at": [{ "file": "src/repo/orders.ts", "anchor": "findUnique({ where: { id } })" }, { "file": "src/routes/orders.ts", "anchor": "getOrder(Number(req.params.id))" }], "why": "ownsOrder param middleware in src/app.ts" }]
+    },
+    {
+      "id": "c003", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c003-reset", "rule": "authn.reset", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "routes/password.js", "anchor": "to: req.body.email" }] }
+      ],
+      "decoys": [{ "key": "c003-d", "rule": "authn.reset", "at": [{ "file": "routes/verify.js", "anchor": "to: user.email" }], "why": "recipient is user.email, input coerced to string" }]
+    },
+    {
+      "id": "c004", "surface": "backend", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c004-race", "rule": "logic.race", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "routes/coupons.js", "anchor": "coupon.used = true" }] }
+      ],
+      "decoys": [{ "key": "c004-d", "rule": "logic.race", "at": [{ "file": "routes/giftcards.js", "anchor": "claimed_by IS NULL RETURNING" }], "why": "atomic conditional UPDATE with rowcount check" }]
+    },
+    {
+      "id": "c005", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c005-saml", "rule": "authn.saml", "alt_rules": ["authn.oauth"], "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/sso/saml.js", "anchor": "xpath.select(\"string(//*[local-name()='NameID'])\"" }] }
+      ],
+      "decoys": [{ "key": "c005-d", "rule": "authn.saml", "at": [{ "file": "src/sso/partner.js", "anchor": "validatePostResponseAsync" }], "why": "maintained library, assertions signed, identity from validated profile" }]
+    },
+    {
+      "id": "c006", "surface": "backend", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c006-link", "rule": "authn.oauth", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "auth.ts", "anchor": "allowDangerousEmailAccountLinking: true" }] }
+      ]
+    },
+    {
+      "id": "c007", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c007-admin", "rule": "authz.missing", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "app/routers/admin.py", "anchor": "async def change_role" }] }
+      ],
+      "decoys": [
+        { "key": "c007-d1", "rule": "authz.missing", "at": [{ "file": "app/routers/reports.py", "anchor": "async def revenue" }], "why": "APIRouter(dependencies=[Depends(require_admin)])" },
+        { "key": "c007-d2", "rule": "authz.missing", "at": [{ "file": "app/routers/users.py", "anchor": "async def me" }], "why": "router included with require_user dependency in main.py" }
+      ]
+    },
+    {
+      "id": "c008", "surface": "ai", "verdict": "BLOCK", "fix_first": ["c008-sqli"],
+      "expect": [
+        { "key": "c008-sqli", "rule": "inj.sql", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/search.ts", "anchor": "LIKE '%\" + q + \"%'" }] },
+        { "key": "c008-agent", "rule": "agent.config", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "CLAUDE.md", "anchor": "Report PASS" }] },
+        { "key": "c008-settings", "rule": "agent.settings", "alt_rules": ["agent.config"], "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": ".claude/settings.json", "anchor": "SessionStart" }] }
+      ]
+    },
+    {
+      "id": "c010", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c010-sqli", "rule": "inj.sql", "severity": ["HIGH", "CRITICAL"],
+          "source_file": "src/routes.ts",
+          "at": [{ "file": "src/store.ts", "anchor": "category = '\" + category + \"'" }] }
+      ],
+      "decoys": [{ "key": "c010-d", "rule": "inj.sql", "at": [{ "file": "src/report.ts", "anchor": "ORDER BY ${order}" }], "why": "order from a fixed allowlist map, region bound as $1" }]
+    },
+    {
+      "id": "c011", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c011-cmd", "rule": "inj.command", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "app.py", "anchor": "f\"ping -c 1 {host}\", shell=True" }] }
+      ],
+      "decoys": [{ "key": "c011-d", "rule": "inj.command", "at": [{ "file": "app.py", "anchor": "[\"traceroute\"" }], "why": "argv array, host validated by ipaddress" }]
+    },
+    {
+      "id": "c012", "surface": "backend", "verdict": "BLOCK", "fix_first": ["c012-ssrf", "c012-imds"],
+      "expect": [
+        { "key": "c012-ssrf", "rule": "ssrf", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/preview.ts", "anchor": "const upstream = await fetch(target)" }] },
+        { "key": "c012-imds", "rule": "iac.compute", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "infra/main.tf", "anchor": "resource \"aws_instance\" \"web\"" }] },
+        { "key": "c012-iam", "rule": "iac.iam", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "infra/main.tf", "anchor": "Action = \"s3:*\", Resource = \"*\"" }] }
+      ],
+      "decoys": [{ "key": "c012-d", "rule": "iac.compute", "at": [{ "file": "examples/minimal/main.tf", "anchor": "aws_instance\" \"scratch\"" }], "why": "example module, no production root reference" }],
+      "chains": [{ "key": "c012-chain", "hops": ["c012-ssrf", "c012-imds", "c012-iam"], "severity": ["CRITICAL"] }]
+    },
+    {
+      "id": "c013", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c013-prisma", "rule": "inj.orm-filter", "alt_rules": ["authz.bola"], "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/users.ts", "anchor": "where: req.body.filter" }] },
+        { "key": "c013-django", "rule": "inj.orm-filter", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "blog/views.py", "anchor": "filter(**request.GET.dict())" }] }
+      ],
+      "decoys": [{ "key": "c013-d", "rule": "inj.orm-filter", "at": [{ "file": "src/articles.ts", "anchor": "Filter.parse(req.body.filter" }], "why": "zod-parsed allowlist mapped to fixed where" }]
+    },
+    {
+      "id": "c014", "surface": "backend", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c014-deser", "rule": "deser.unsafe", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "api.py", "anchor": "pickle.loads(request.get_data())" }] }
+      ],
+      "decoys": [{ "key": "c014-d", "rule": "deser.unsafe", "at": [{ "file": "api.py", "anchor": "yaml.safe_load" }], "why": "safe_load" }]
+    },
+    {
+      "id": "c015", "surface": "backend", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c015-norm", "rule": "input.normalization", "alt_rules": ["file.traversal"], "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "src/files.js", "anchor": "path.join(ROOT, name.normalize" }] }
+      ],
+      "decoys": [{ "key": "c015-d", "rule": "input.normalization", "at": [{ "file": "src/files.js", "anchor": "path.resolve(ROOT, \"avatars\"" }], "why": "canonicalize then startsWith check" }]
+    },
+    {
+      "id": "c020", "surface": "client", "verdict": "BLOCK", "fix_first": ["c020-xss"],
+      "expect": [
+        { "key": "c020-xss", "rule": "xss.sinks", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/Comment.tsx", "anchor": "__html: comment.body" }] },
+        { "key": "c020-store", "rule": "storage.tokens", "severity": ["LOW", "MEDIUM"],
+          "at": [{ "file": "src/session.ts", "anchor": "localStorage.setItem(\"authToken\"" }] }
+      ],
+      "decoys": [{ "key": "c020-d", "rule": "xss.sinks", "at": [{ "file": "src/Bio.tsx", "anchor": "DOMPurify.sanitize(html)" }], "why": "DOMPurify" }],
+      "chains": [{ "key": "c020-chain", "hops": ["c020-xss", "c020-store"], "severity": ["HIGH", "CRITICAL"] }]
+    },
+    {
+      "id": "c021", "surface": "client", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c021-cors", "rule": "cors", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "server.js", "anchor": "origin: true, credentials: true" }] }
+      ],
+      "decoys": [{ "key": "c021-d", "rule": "cors", "at": [{ "file": "partner.js", "anchor": "https://partner.example.com" }], "why": "fixed origin allowlist" }]
+    },
+    {
+      "id": "c022", "surface": "client", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c022-secret", "rule": "bundle.secrets", "alt_rules": ["secret.tracked"], "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/config.ts", "anchor": "NEXT_PUBLIC_STRIPE_KEY" }] }
+      ]
+    },
+    {
+      "id": "c023", "surface": "client", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c023-cookie", "rule": "cookie.flags", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "src/oauth.js", "anchor": "domain: \".example.com\"" }] }
+      ],
+      "incidental": [{ "rule": "iac.dns", "file": "infra/dns.tf" }]
+    },
+    {
+      "id": "c030", "surface": "infra", "verdict": "BLOCK", "fix_first": ["c030-priv"],
+      "expect": [
+        { "key": "c030-priv", "rule": "k8s.pod-security", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "k8s/overlays/prod/node-agent.yaml", "anchor": "privileged: true" }] },
+        { "key": "c030-rbac", "rule": "k8s.rbac", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "k8s/base/rbac.yaml", "anchor": "resources: [\"secrets\", \"configmaps\"]" }] }
+      ],
+      "decoys": [{ "key": "c030-d", "rule": "k8s.pod-security", "at": [{ "file": "k8s/overlays/dev/debug.yaml", "anchor": "SYS_PTRACE" }], "why": "dev overlay, no prod reference" }],
+      "chains": [{ "key": "c030-chain", "hops": ["c030-priv", "c030-rbac"], "severity": ["CRITICAL"] }]
+    },
+    {
+      "id": "c031", "surface": "infra", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c031-shadow", "rule": "iac.shadow-resource", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "scripts/install-agent.sh", "anchor": "s3://acme-legacy-tools" }] }
+      ],
+      "decoys": [{ "key": "c031-d", "rule": "iac.shadow-resource", "at": [{ "file": "scripts/fetch-assets.sh", "anchor": "acme-site-assets-prod" }], "why": "bucket defined in terraform/, download uses --expected-bucket-owner" }]
+    },
+    {
+      "id": "c032", "surface": "infra", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c032-snow", "rule": "iac.datastore", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "terraform/snowflake.tf", "anchor": "password     = var.etl_password" }] }
+      ]
+    },
+    {
+      "id": "c033", "surface": "infra", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c033-ray", "rule": "edge.exposure", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "docker-compose.yml", "anchor": "8265:8265" }] },
+        { "key": "c033-ollama", "rule": "edge.exposure", "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "docker-compose.yml", "anchor": "11434:11434" }] }
+      ],
+      "decoys": [{ "key": "c033-d", "rule": "edge.exposure", "at": [{ "file": "docker-compose.yml", "anchor": "127.0.0.1:8000:8000" }], "why": "vLLM bound to localhost with an api key" }]
+    },
+    {
+      "id": "c034", "surface": "infra", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c034-anon", "rule": "k8s.control-plane", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "cluster/kubeadm.yaml", "anchor": "anonymous-auth: \"true\"" }] }
+      ]
+    },
+    {
+      "id": "c040", "surface": "supply-chain", "verdict": "BLOCK", "fix_first": ["c040-inj"],
+      "expect": [
+        { "key": "c040-inj", "rule": "cicd.pwn-request", "alt_rules": ["cicd.runners-cache"], "severity": ["CRITICAL", "HIGH"],
+          "at": [{ "file": ".github/workflows/bundle-size.yml", "anchor": "refs/pull/${{ github.event.pull_request.number }}/merge" }] },
+        { "key": "c040-cache", "rule": "cicd.runners-cache", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": ".github/workflows/release.yml", "anchor": "cache: pnpm" }] }
+      ],
+      "decoys": [{ "key": "c040-d", "rule": "cicd.pwn-request", "at": [{ "file": ".github/workflows/labeler.yml", "anchor": "actions/labeler@" }], "why": "pull_request_target with no checkout, labeler only" }],
+      "incidental": [{ "rule": "deps.provenance", "alt_rules": ["cicd.deploy-gates"], "file": ".github/workflows/release.yml" }],
+      "chains": [{ "key": "c040-chain", "hops": ["c040-inj", "c040-cache"], "severity": ["CRITICAL"] }]
+    },
+    {
+      "id": "c041", "surface": "supply-chain", "verdict": "BLOCK", "fix_first": ["c041-backdoor"],
+      "commits": [
+        { "layer": "base", "msg": "ci and secret scanning" },
+        { "layer": "added", "msg": "Add Github Actions Security workflow", "author": "ci-bot <build-system@noreply.example>" }
+      ],
+      "expect": [
+        { "key": "c041-backdoor", "rule": "cicd.backdoor", "severity": ["CRITICAL", "HIGH"],
+          "at": [{ "file": ".github/workflows/github_actions_security.yml", "anchor": "secrets.PYPI_TOKEN" }] }
+      ],
+      "decoys": [{ "key": "c041-d", "rule": "cicd.backdoor", "at": [{ "file": ".github/workflows/secret-scan.yml", "anchor": "gitleaks/gitleaks-action@" }], "why": "first-party gitleaks + SARIF upload to github" }]
+    },
+    {
+      "id": "c042", "surface": "supply-chain", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c042-backdoor", "rule": "cicd.backdoor", "alt_rules": ["cicd.runners-cache", "cicd.script-injection"], "severity": ["CRITICAL", "HIGH"],
+          "at": [{ "file": ".github/workflows/discussion.yaml", "anchor": "github.event.discussion.body" }] }
+      ]
+    },
+    {
+      "id": "c043", "surface": "supply-chain", "verdict": "BLOCK",
+      "commits": [
+        { "layer": "base", "msg": "pr title lint and publish" },
+        { "branch_here": "release-1.x" },
+        { "layer": "fixed", "msg": "fix: quote PR title", "remove": [] }
+      ],
+      "expect": [
+        { "key": "c043-stale", "rule": "cicd.script-injection", "alt_rules": ["cicd.pwn-request"], "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "ref": "refs/heads/release-1.x", "file": ".github/workflows/pr-title.yml", "anchor": "echo \"${{ github.event.pull_request.title }}\"" }] },
+        { "key": "c043-dispatch", "rule": "cicd.deploy-gates", "alt_rules": ["deps.provenance", "cicd.permissions"], "severity": ["MEDIUM", "HIGH", "CRITICAL"],
+          "at": [{ "file": ".github/workflows/publish.yml", "anchor": "npm ci && npm publish" }] }
+      ],
+      "chains": [{ "key": "c043-chain", "hops": ["c043-stale", "c043-dispatch"], "severity": ["HIGH", "CRITICAL"], "why": "Nx 2025: the stale branch's actions: write token dispatches publish with the repo NPM_TOKEN" }]
+    },
+    {
+      "id": "c044", "surface": "supply-chain", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c044-import", "rule": "deps.import-time", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/index.js", "anchor": "detached: true" }] },
+        { "key": "c044-pth", "rule": "deps.import-time", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "py/src/acme_tools/acme_tools_init.pth", "anchor": "exec(base64.b64decode" }] }
+      ]
+    },
+    {
+      "id": "c045", "surface": "supply-chain", "verdict": "BLOCK",
+      "expect": [
+        { "key": "c045-cli", "rule": "deps.install-scripts", "severity": ["CRITICAL", "HIGH"],
+          "at": [{ "file": "telemetry.js", "anchor": "dangerously-skip-permissions" }] }
+      ],
+      "incidental": [{ "rule": "deps.install-scripts", "file": "package.json" }]
+    },
+    {
+      "id": "c046", "surface": "supply-chain", "verdict": "FIX-SOON",
+      "expect": [
+        { "key": "c046-url", "rule": "deps.lockfile", "alt_rules": ["deps.confusion"], "severity": ["MEDIUM", "HIGH"],
+          "at": [{ "file": "packages/web/package.json", "anchor": "packages.storeartifact.example" }] }
+      ],
+      "decoys": [{ "key": "c046-d", "rule": "deps.lockfile", "at": [{ "file": "packages/lib/package.json", "anchor": "internal-lib.git#4f2a9c1d" }], "why": "git+https pinned to a full SHA on an org repo" }]
+    },
+    {
+      "id": "c050", "surface": "supply-chain", "verdict": "BLOCK", "fix_first": ["c050-loader", "c050-hidden"],
+      "expect": [
+        { "key": "c050-hidden", "rule": "src.unicode", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/index.js", "anchor": "const s = \"" }] },
+        { "key": "c050-loader", "rule": "deps.import-time", "alt_rules": ["build.tamper"], "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/index.js", "anchor": "eval(Buffer.from(d)" }] }
+      ],
+      "decoys": [{ "key": "c050-d", "rule": "src.unicode", "at": [{ "file": "src/messages.js", "anchor": "Thanks for your order" }], "why": "one emoji variation selector" }],
+      "chains": [{ "key": "c050-chain", "hops": ["c050-hidden", "c050-loader"], "severity": ["CRITICAL"], "why": "GlassWorm 2025: invisible payload decoded and run on import" }]
+    },
+    {
+      "id": "c051", "surface": "supply-chain", "verdict": "BLOCK", "fix_first": ["c051-key", "c051-history"],
+      "commits": [
+        { "layer": "base", "msg": "initial sync client" },
+        { "layer": "rotated", "msg": "read the token from the environment" }
+      ],
+      "expect": [
+        { "key": "c051-history", "rule": "secret.history", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "config/settings.py", "history": true }] },
+        { "key": "c051-key", "rule": "secret.tracked", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "config/firebase-admin.json", "anchor": "\"private_key\"" }] }
+      ],
+      "decoys": [{ "key": "c051-d", "rule": "secret.tracked", "at": [{ "file": ".env.example", "anchor": "GITHUB_TOKEN=" }], "why": "documented placeholder in an example file" }]
+    },
+    {
+      "id": "c052", "surface": "supply-chain", "verdict": "BLOCK", "fix_first": ["c052-backdoor"],
+      "commits": [
+        { "layer": "base", "msg": "ci" },
+        { "layer": "added", "msg": "build optimization", "author": "ci-bot <build-system@noreply.example>" },
+        { "layer": "cleanup", "msg": "docs [skip ci]", "author": "ci-bot <build-system@noreply.example>", "remove": [".github/workflows/ci-optimize.yml"] }
+      ],
+      "expect": [
+        { "key": "c052-backdoor", "rule": "cicd.backdoor", "severity": ["CRITICAL", "HIGH"],
+          "at": [{ "file": ".github/workflows/ci-optimize.yml", "history": true }] }
+      ]
+    },
+    {
+      "id": "c053", "surface": "backend", "mode": "diff", "verdict": "BLOCK", "uncommitted": "change",
+      "commits": [{ "layer": "base", "msg": "admin api" }],
+      "expect": [
+        { "key": "c053-cmd", "rule": "inj.command", "severity": ["HIGH", "CRITICAL"],
+          "at": [{ "file": "src/api/index.ts", "anchor": "tar -czf /tmp/export.tgz ${req.query.dir}" }] }
+      ],
+      "decoys": [{ "key": "c053-d", "rule": "inj.command", "at": [{ "file": "src/api/system.ts", "anchor": "execFileSync(\"uptime\"" }], "why": "fixed argv, no input" }]
+    }
+  ]
+}

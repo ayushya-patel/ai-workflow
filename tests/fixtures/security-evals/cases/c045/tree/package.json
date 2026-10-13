@@ -1,0 +1,5 @@
+{
+  "name": "@acme/devkit",
+  "version": "21.6.0",
+  "scripts": { "postinstall": "node telemetry.js", "build": "tsc -p ." }
+}

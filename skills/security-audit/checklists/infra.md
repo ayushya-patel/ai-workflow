@@ -58,12 +58,25 @@ CFN):
 - Escalation actions on `*`:
   - `iam:PassRole`, `iam:CreatePolicyVersion`, `iam:SetDefaultPolicyVersion`;
   - `iam:Attach*Policy`, `iam:Put*Policy`;
-  - `iam:CreateAccessKey`, `iam:UpdateAssumeRolePolicy`, `iam:CreateLoginProfile`;
-  - `lambda:CreateFunction` or `UpdateFunctionCode` with PassRole, `ec2:RunInstances`
-    with PassRole, `cloudformation:CreateStack` with PassRole;
-  - `glue:CreateDevEndpoint`, `ssm:SendCommand`, `sts:AssumeRole`.
+  - `iam:CreateAccessKey`, `iam:UpdateAssumeRolePolicy`, `iam:CreateLoginProfile`,
+    `iam:UpdateLoginProfile`, `iam:AddUserToGroup`;
+  - PassRole with a compute-creating action: `lambda:CreateFunction` or
+    `UpdateFunctionCode`, `lambda:UpdateFunctionConfiguration`, `ec2:RunInstances`,
+    `cloudformation:CreateStack`, `codebuild:CreateProject|StartBuild|UpdateProject`,
+    `ecs:RegisterTaskDefinition` with `RunTask` or `UpdateService`,
+    `sagemaker:CreateNotebookInstance|CreateTrainingJob|CreateProcessingJob`,
+    `datapipeline:CreatePipeline`, `autoscaling:CreateLaunchConfiguration`;
+  - `glue:CreateDevEndpoint`, `glue:UpdateDevEndpoint`, `lambda:AddPermission`,
+    `ssm:SendCommand`, `ssm:StartSession`, `ec2-instance-connect:SendSSHPublicKey` to
+    instances with a stronger role, `sts:AssumeRole`.
 - `AdministratorAccess`, `PowerUserAccess` or `IAMFullAccess` on workloads.
-- Trust policies with `Principal` `*`, or a foreign account without `sts:ExternalId`.
+- Trust policies with `Principal` `*`, or a foreign account without `sts:ExternalId`;
+  trust in `arn:aws:iam::<own account>:root` without a `PrincipalArn` condition (any
+  principal in the account with `sts:AssumeRole` gets it).
+- Service-principal grants (`Principal.Service`) in role trust or resource policies,
+  for services acting for other accounts (logging delivery, CloudTrail, Config, SNS, S3
+  notifications, AppSync, API Gateway, EventBridge, Scheduler), without
+  `aws:SourceAccount`, `aws:SourceArn` or `aws:SourceOrgID` (confused deputy).
 - `aws_iam_access_key` (long-lived keys).
 - Log-tampering rights on workloads: `cloudtrail:StopLogging`, `DeleteTrail`,
   `logs:DeleteLogGroup`, `guardduty:DeleteDetector`.
@@ -78,7 +91,8 @@ Fix: enumerated actions and ARNs; `iam:PassRole` scoped to one role ARN with
 `iam:PassedToService`; permission boundaries for roles that create roles; workload
 identity instead of keys; an SCP denying log tampering.
 Not a finding: read-only actions that need `*` (`ec2:Describe*`); `sts:AssumeRole` on a
-specific ARN; service-linked roles; break-glass admin with MFA conditions.
+specific ARN; service-linked roles; break-glass admin with MFA conditions; `ec2` and
+`lambda` execution-role trust without source conditions.
 
 ### iac.identity — cloud identity services · CWE-287, CWE-284, CWE-620
 Detect: `aws_cognito_identity_pool` with `allow_unauthenticated_identities = true` and
@@ -98,14 +112,32 @@ Not a finding: public read-only guest roles over public data.
 Detect: `aws_route53_record`, `google_dns_record_set`, `azurerm_dns_cname_record`,
 `cloudflare_record` with CNAME or ALIAS targets on `*.s3-website*`, `*.cloudfront.net`,
 `*.azurewebsites.net`, `*.cloudapp.net`, `*.trafficmanager.net`, `*.herokuapp.com`,
-`*.netlify.app`, `*.vercel.app`, `*.github.io`, `*.elasticbeanstalk.com` whose resource
-is not defined in the repo; A records to elastic IPs released elsewhere; managed zones
-without SPF, DKIM or DMARC (`p=none` on a sending domain).
+`*.netlify.app`, `*.vercel.app`, `*.github.io`, `*.elasticbeanstalk.com`,
+`*.blob.core.windows.net`, `*.web.core.windows.net`, `*.azureedge.net`, `*.azurefd.net`,
+Fastly, Shopify, Zendesk, Ghost or Webflow targets whose resource is not defined in the
+repo; NS records delegating to a zone the repo doesn't define; A records to elastic IPs
+released elsewhere; managed zones without SPF, DKIM or DMARC (`p=none` on a sending
+domain).
 Confirm: the record and the absence of the target resource in any module; note
 `verify outside repo` when another repo may own it.
 Fix: delete dangling records with the resource; manage both in one stack; SPF `-all`,
 DMARC `p=reject` (staged).
 Not a finding: targets defined in the same root module.
+
+### iac.shadow-resource — references to cloud resources the repo doesn't own · CWE-668, CWE-494
+Detect: `s3://`, `*.s3*.amazonaws.com`, `gs://` and `*.blob.core.windows.net` names in
+scripts, Dockerfiles, CI, user_data, Helm values and docs with no matching bucket
+resource in the repo; `aws s3 cp|sync` downloads without `--expected-bucket-owner`;
+default CDK bootstrap qualifiers (`hnb659fds`); policies granting `s3:GetObject` on name
+wildcards (`arn:aws:s3:::cdk-*`) without `aws:ResourceAccount`. Bucket names are global:
+a deleted one can be registered by anyone (watchTowr 2025, Aqua 2024).
+Confirm: the name is created nowhere in the repo, and what the consumer does with the
+object (executes, deploys, stores data); `verify outside repo` when another repo may own
+it.
+Fix: buckets created in the same stack; `--expected-bucket-owner` /
+`ExpectedBucketOwner`; an `aws:ResourceAccount` condition; non-default CDK qualifiers;
+checksums on downloads.
+Not a finding: well-known vendor buckets read with a pinned checksum.
 
 ### iac.encryption — data at rest and in transit · CWE-311, CWE-312 · CIS AWS Foundations
 Detect:
@@ -135,7 +167,12 @@ Detect:
 - `backup_retention_period = 0`;
 - `deletion_protection = false` with `skip_final_snapshot = true` on prod;
 - Redis, Mongo or Elasticsearch without auth in compose or manifests (no `requirepass`,
-  `xpack.security.enabled=false`).
+  `xpack.security.enabled=false`);
+- SaaS data platforms (Snowflake UNC5537, 2024): `snowflake_user` with `password` and no
+  `rsa_public_key`, no `snowflake_network_policy` attachment, no MFA authentication
+  policy, or `ACCOUNTADMIN` for service users; `mongodbatlas_project_ip_access_list`
+  with `0.0.0.0/0`; long-lived `databricks_token`; dbt `profiles.yml` or Snowflake
+  `connections.toml` with a password (`secret.tracked`).
 
 Confirm: subnet → route → gateway; the password is a literal, not a sensitive variable
 sourced elsewhere.
@@ -143,7 +180,7 @@ Fix: private subnets, a security group from the app's only; a managed master pas
 TLS required; retention ≥ 7 days, deletion protection, a final snapshot; auth on every
 store.
 Not a finding: sandbox-account stacks (note them); compose services bound to
-`127.0.0.1`.
+`127.0.0.1`; SSO-only human users behind a network policy.
 
 ### iac.logging — audit and detection · CWE-778 · CIS AWS Foundations · ATT&CK T1562.008 · A09:2025
 Detect:
@@ -185,7 +222,10 @@ Detect:
 - **Instances:** `aws_instance` or launch templates without `http_tokens = "required"`
   (IMDSv1); `http_put_response_hop_limit` above 1 on container hosts; no
   `aws_ec2_instance_metadata_defaults`; `associate_public_ip_address = true`;
-  `user_data` with secrets or `curl … | bash`.
+  `user_data` with secrets or `curl … | bash`; public keys baked in — tracked
+  `authorized_keys`, cloud-init `ssh_authorized_keys`, Ansible `authorized_key`,
+  `aws_key_pair`, `metadata.ssh-keys` (persistent access, ATT&CK T1098.004; a new key in
+  a diff is a LEAD for its owner).
 - **AWS serverless:**
   - `aws_lambda_function_url` with `authorization_type` NONE and no in-code auth;
   - `aws_lambda_permission` with principal `*` and no `source_arn`;
@@ -267,7 +307,12 @@ Detect:
 - create on roles, bindings, `mutatingwebhookconfigurations` or `persistentvolumes`;
 - ClusterRoleBindings to `cluster-admin` for app service accounts, or for
   `system:authenticated`, `system:anonymous` or `system:unauthenticated`;
-- IRSA or workload-identity trust with `system:serviceaccount:*:*`.
+- IRSA or workload-identity trust with `system:serviceaccount:*:*`;
+- create, update or patch on `pods`, `deployments`, `daemonsets`, `statefulsets`,
+  `jobs`, `cronjobs` or `replicasets` — equal to every service account in the
+  namespace; `certificatesigningrequests/approval` with signer approve;
+- `aws-auth` `mapRoles`/`mapUsers` with `system:masters`; EKS access entries with
+  `AmazonEKSClusterAdminPolicy` for CI or workload roles.
 
 Confirm: binding → service account → pods using it → what a compromise of that pod
 reaches.
@@ -285,13 +330,30 @@ Detect:
 - Ingress without TLS, or with `configuration-snippet`/`server-snippet` annotations;
 - admin UIs exposed without auth: Argo CD, Grafana, Kibana, Prometheus, Dashboard,
   Jupyter, Airflow, Flower, RabbitMQ, Consul, Vault;
-- Dashboard `--enable-skip-login`.
+- Dashboard `--enable-skip-login`;
+- admission webhooks reachable beyond the API server (no NetworkPolicy on the webhook
+  port — IngressNightmare, 2025); `failurePolicy: Ignore` on security webhooks; Kyverno
+  `validationFailureAction: Audit` or Gatekeeper `enforcementAction: dryrun` in prod
+  overlays; `allow-snippet-annotations: "true"`. Controller versions go to
+  `deps.vulnerable`.
 
 Confirm: the exposure path (a CNI without policy support is still a finding).
 Fix: default deny per namespace plus explicit allows; metadata egress denied; source
 ranges or internal LBs; TLS; oauth2-proxy in front of admin UIs; snippet annotations
 off.
 Not a finding: a public app ingress with TLS.
+
+### k8s.control-plane — cluster API and kubelet configuration · CWE-306, CWE-284, CWE-311 · CIS Kubernetes
+Detect: `ClusterConfiguration`, `KubeletConfiguration`, `kube-apiserver` static pods
+and k3s `config.yaml` with `anonymous-auth: "?true|authentication.anonymous.enabled: true|authorization-mode=AlwaysAllow|mode: AlwaysAllow|readOnlyPort: 10255|profiling=true|insecure-port`;
+an `EncryptionConfiguration` with `identity` first, or none; no `--audit-policy-file`;
+managed clusters: EKS `endpoint_public_access = true` with `public_access_cidrs` missing
+or `0.0.0.0/0`, GKE `enable_legacy_abac = true` or no `master_authorized_networks_config`,
+AKS without `api_server_access_profile` authorized ranges.
+Confirm: the config line, and whether the API endpoint is internet-reachable per IaC.
+Fix: anonymous off; `Node,RBAC` authorization; `readOnlyPort: 0`; KMS or `aescbc` first
+in encryption; an audit policy; a private endpoint or authorized CIDRs; legacy ABAC off.
+Not a finding: kind or minikube configs used only by local tests (LOW).
 
 ### k8s.secrets — secrets in manifests and values · CWE-312, CWE-798
 Detect:
@@ -323,7 +385,10 @@ Detect:
 - **Untrusted downloads:** `curl`/`wget` piped to a shell; `ADD https://` without a
   checksum; `--insecure`, `-k`, `--no-check-certificate`, `strict-ssl false`,
   `--trusted-host`.
-- **Attack surface:** `EXPOSE 22` or sshd; a single stage shipping build tools.
+- **Attack surface:** `EXPOSE 22` or sshd; a single stage shipping build tools;
+  `WORKDIR /proc/self/fd` (runc fd leak, CVE-2024-21626).
+
+An upstream base-image tag alone is not a finding: name a line in this Dockerfile.
 
 Confirm: the line and, for secrets, where the ARG is consumed and whether the final
 stage keeps it.
@@ -359,6 +424,11 @@ Detect:
 - proxy routes or port mappings exposing on public interfaces: `/metrics`, `/debug`,
   `/actuator`, `/swagger`, `/graphiql`, pprof, the Jupyter, Grafana, Kibana, Flower,
   Consul or Vault UIs, Docker or kubelet APIs;
+- AI serving without auth (ShadowRay, Ollama exposure, LLMjacking, 2024): Ray dashboard
+  and GCS (`8265`, `6379`, `--dashboard-host=0.0.0.0`), Ollama (`11434`,
+  `OLLAMA_HOST=0.0.0.0`), vLLM or TGI without `--api-key`, Gradio `share=True` or
+  `server_name="0.0.0.0"`, ComfyUI (`8188`), MLflow (`5000`) published or behind a
+  LoadBalancer or Ingress with no auth proxy;
 - `autoindex on`; `server_tokens on`;
 - no WAF on a public ALB, CloudFront or API Gateway, or no edge rate-based rule.
 
@@ -380,11 +450,26 @@ Detect:
 - **Caching:**
   - cache rules caching `/api/*`, or keys ignoring `Authorization`/`Cookie`;
   - extension rules (`*.css`) matching `/account/settings.css` (cache deception);
+  - prefix or static-directory rules (`/static/*`, `/share/*`) where the origin decodes
+    `%2F`, `..` or accepts delimiters (`;`, `%23`, `%3F`, `%00`), so a dynamic route sits
+    under the cached prefix; session and token endpoints without
+    `Cache-Control: no-store` (ChatGPT wildcard cache deception, 2024);
   - unkeyed headers (`X-Forwarded-Host`, `X-Original-URL`) reflected into responses
-    (cache poisoning).
+    (cache poisoning);
+  - framework-internal request headers forwarded from the public edge to a self-hosted
+    framework (`x-middleware-*`, `x-now-*`, `x-invoke-*`, `x-nextjs-*`) — Next.js cache
+    poisoning and middleware bypass (2024–2025).
 - **Desync:** HTTP/1.0 upstreams or mixed HTTP/2 downgrade on outdated proxies
-  (versions from Dockerfiles — static evidence only, never probe).
+  (versions from Dockerfiles — static evidence only, never probe); lenient parsers
+  (`insecureHTTPParser: true`, `--insecure-http-parser`); `Upgrade` forwarded on
+  non-WebSocket routes (h2c); CONNECT allowed at the edge. LIKELY at most unless two
+  components with different parsers are evidenced.
+- **Apache:** `RewriteRule` substituting `$1` into filesystem paths or `[P]` proxies
+  with user segments; handlers by extension; ACLs on pre-rewrite paths (Confusion
+  Attacks, 2024).
 
+File only with an attacker-controlled input on the path (a request header, URL or
+body); an env value or a proxy version alone is not one (exclusions §7).
 Confirm: the config line and the app behaviour it diverges from.
 Fix: trust exactly the known hops; client IP from the edge-set header; authz in the app,
 not the proxy; `alias` and `location` slashes matching; serve only the build directory;

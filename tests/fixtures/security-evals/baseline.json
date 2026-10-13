@@ -1,0 +1,5 @@
+{
+  "note": "Floors the eval score must not drop below. Raise together with a checklist change in the same PR, pasting the scorer output in the PR body. 0 until a full LLM run under tests/fixtures/security-evals/README.md sets a real baseline.",
+  "recall": 0,
+  "precision": 0
+}

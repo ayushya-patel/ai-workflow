@@ -1,0 +1,15 @@
+name: pr-title
+on:
+  pull_request_target:
+    types: [opened, edited]
+permissions:
+  pull-requests: read
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: check title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf '%s\n' "$TITLE" | grep -E '^(feat|fix|chore):'

@@ -1,0 +1,6 @@
+const express = require("express")
+const { readUpload, readAvatar } = require("./files")
+const app = express()
+app.get("/files/:name", async (req, res) => res.send(await readUpload(req.params.name)))
+app.get("/avatars/:name", async (req, res) => res.send(await readAvatar(req.params.name)))
+app.listen(3000)
