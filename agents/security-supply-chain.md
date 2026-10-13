@@ -24,7 +24,9 @@ approach.
 
 The caller gives you the `audit.mjs secrets` (tree and history), `unicode` and
 `scan gitleaks|trufflehog` lines, plus the inventory's `SECRET-FILE`, `SCANNER-CONFIG`,
-`ODD-NAME` and `SYMLINK` lines. Classify them; don't re-run the sweeps.
+`ODD-NAME`, `SYMLINK` and `IOC` lines. Classify them; don't re-run the sweeps. An `IOC`
+line is checked first (`cicd.backdoor`): confirmed, it is CRITICAL `active compromise
+suspected`.
 
 - **Placeholder or real.** Use the `placeholder` flag and the masked context from
   `audit.mjs show`.
@@ -38,14 +40,22 @@ Never `git log -p`, `git show <rev>:<path>` or `Read` of a secret window.
 
 ## 3. CI/CD
 
-For each workflow, write one line:
+`node <plugin>/scripts/security/audit.mjs workflows` lists workflow and local-action copies
+on other branches that differ from HEAD (an `IOC` tag goes first); read each with
+`at <ref> <path>` and treat it as a workflow of its own. For each workflow, and each local
+composite action, write one line:
 
 trigger · who controls its inputs · checkout ref · steps that execute tree code ·
-effective `permissions` · secrets and `id-token` in scope · third-party actions and
-their pin state · environment gate
+effective `permissions` · secrets and `id-token` in scope · cache key templates
+(`actions/cache` and `setup-*` `cache:` inputs) · `runs-on` labels · artifacts produced
+and consumed · third-party actions and their pin state · environment gate
 
-Then apply the `cicd.*` classes. Severity rises when a fork, issue or comment author
-controls input and the job holds write tokens or secrets.
+Then pair rows across files before judging any single one: an untrusted-execution row
+against every release row with a matching cache template, runner label or artifact
+(`cicd.runners-cache`), and a write-token row against every dispatchable publish row
+(`cicd.deploy-gates`). Apply the `cicd.*` classes. Severity rises when a fork, issue or
+comment author controls input and the job holds write tokens or secrets. Run the
+`cicd.backdoor` history pass once over `.github/`, lockfiles, build files and `*.pth`.
 
 Scanners are leads: `audit.mjs scan zizmor`, `scan actionlint`. Read GitLab, Jenkins,
 Bitbucket, CircleCI and Azure files the same way. OIDC trust lives in IaC: read the

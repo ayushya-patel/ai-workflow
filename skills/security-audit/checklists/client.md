@@ -98,7 +98,10 @@ Fix: a strict CSP set per response in middleware: `script-src 'nonce-<128-bit>'
 frame-ancestors 'none'; require-trusted-types-for 'script'`; roll out report-only first.
 Not a finding: `'unsafe-inline'` beside a nonce (ignored by modern browsers); JSON-only
 APIs need only `default-src 'none'; frame-ancestors 'none'`. Missing CSP alone is
-HARDENING; it rises with a confirmed XSS.
+HARDENING; it rises with a confirmed XSS. List every non-first-party host in
+`img-src`, `connect-src` and `frame-src` as a LEAD: ownership and registration can't be
+checked offline, and an expired allowlisted domain is an exfiltration channel
+(ForcedLeak, 2025).
 
 ### hdr.framing — clickjacking · CWE-1021
 Detect: no `frame-ancestors` and no `X-Frame-Options` on HTML with one-click state
@@ -126,8 +129,13 @@ Flag auth, session or refresh cookies without `HttpOnly`, `Secure` (or `secure` 
 `NODE_ENV` behind a TLS-terminating proxy without `trust proxy`), or `SameSite`;
 `SameSite=None` without need; `Domain=.example.com` (any subdomain, incl. a taken-over
 one, can read or plant it); no `__Host-` prefix; long `Max-Age` without rotation;
-literal or weak signing secrets (location only).
-Confirm: the options on the production path.
+literal or weak signing secrets (location only). OAuth transaction cookies count as auth
+cookies: `state|oauth_state|code_verifier|pkce|nonce|next-auth[.]state|csrf` without
+`__Host-` let a sibling subdomain toss its own value before the callback (cookie
+tossing, 2024).
+Confirm: the options on the production path. Impact rises with a sibling subdomain
+serving user content or previews (`iac.dns`, wildcard DNS, `usercontent`, preview
+deployments).
 Fix: `__Host-session; Path=/; Secure; HttpOnly; SameSite=Lax` (Strict for admin), no
 Domain, rotation on login.
 Not a finding: preference cookies; double-submit CSRF cookies readable by JS (must be
@@ -272,9 +280,13 @@ Not a finding: token-in-first-message auth without cookies.
 ### oauth.client — OAuth shape in browser and mobile clients · CWE-346, CWE-287
 Detect: `response_type=token`; no `code_challenge`; state or nonce not checked on the
 callback; `jwt-decode` claims trusted for authorization; redirect_uri built from
-`window.location`; tokens sent with `postMessage('*')`.
+`window.location`; tokens sent with `postMessage('*')`; a callback or error page that
+loads third-party scripts, has a message listener, lacks `Referrer-Policy: no-referrer`,
+reads tokens from both fragment and query, or leaves the code in the URL before scripts
+run (Dirty Dancing, 2022).
 Confirm: the callback without checks, or the flow parameters.
-Fix: code + PKCE; verify state and nonce; validate tokens server-side.
+Fix: code + PKCE; verify state and nonce; validate tokens server-side; a callback page
+with no third-party scripts that scrubs the code (`history.replaceState`) first.
 Not a finding: Auth0 SPA, MSAL, Auth.js with defaults.
 
 ### next.config — framework configuration · CWE-918, CWE-200
@@ -327,6 +339,18 @@ Confirm: the call and the key name.
 Fix: Keychain/Keystore through `expo-secure-store` or `react-native-keychain` with
 `WHEN_UNLOCKED_THIS_DEVICE_ONLY`; backup exclusions; logs stripped in release.
 Not a finding: non-sensitive preferences.
+
+### mobile.auth — biometrics not bound to a key · CWE-287, CWE-603 · MASVS-AUTH-2
+Detect: Android `BiometricPrompt` `authenticate[(]` without a `CryptoObject`, keys
+without `setUserAuthenticationRequired(true)`; iOS `evaluatePolicy` gating data stored
+without `SecAccessControlCreateWithFlags` (`.biometryCurrentSet`, `.userPresence`); React
+Native `authenticateAsync` or `simplePrompt` results used as a boolean gate.
+Flag a biometric success callback treated as proof: a hook on a rooted or instrumented
+device flips it.
+Confirm: the callback and what it unlocks.
+Fix: a Keystore or Keychain key that requires user authentication, used through a
+`CryptoObject` or access-control flags; server-side session binding.
+Not a finding: biometrics as UI convenience before a server-verified credential.
 
 ### mobile.deeplinks — deep, App and Universal Links · CWE-939 · MASVS-PLATFORM-1
 Detect: custom schemes (`myapp://`) handling auth callbacks; `CFBundleURLSchemes` or

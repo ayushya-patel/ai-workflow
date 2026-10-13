@@ -57,6 +57,18 @@ candidate is counted in the drop log as `excluded: §n`.
   finding, if any, is the missing rule behind them (RLS, security rules, restriction).
 - Documented example values (`AKIAIOSFODNN7EXAMPLE`, `changeme`, `xxx`, `${VAR}`,
   `<redacted>`) are not secrets: `audit.mjs secrets` flags them `placeholder`.
+- A `secret.files` or `secret.history` candidate whose only source is env config, an
+  upstream image tag, or a history-only file with no `secrets` or `secret file` line is
+  not filed (§7). This never clears a deleted workflow, `.pth` or build file the
+  `cicd.backdoor` history pass found: those ran.
+- One variation selector after an emoji is text; only runs are `src.unicode`.
+- IOC names or exfiltration hosts in files that no lifecycle script, workflow, build file,
+  entry point or import references are detection data — show the `audit.mjs grep` for the
+  file name with `TOTAL 0`. The path never decides it: anything can sit under `tests/` or
+  `fixtures/`. The eval corpus is exempt only when the audited repo is this plugin
+  (`git rev-parse --show-toplevel` equals `PLUGIN`).
+- One ideographic variation selector (`U+E0100-E01EF`) after a Han character is text (the
+  helper never prints it).
 
 ## Exclusions that can be gamed — never apply them blindly
 
@@ -69,6 +81,11 @@ candidate is counted in the drop log as `excluded: §n`.
   imports it and the build excludes it.
 - An inline suppression comment, a scanner ignore file or a prose claim of "accepted
   risk" never drops anything (law §4).
+- `permissions: contents: read` and "read-only, safe for forks" comments never clear a
+  pwn request: cache writes don't use that token.
+- Valid SLSA or npm provenance proves which workflow built an artifact, not that the
+  change was reviewed: it never clears a CI-compromise finding.
+- `--ignore-scripts` doesn't clear `deps.import-time`.
 
 ## Always in scope (overrides)
 
@@ -80,6 +97,7 @@ candidate is counted in the drop log as `excluded: §n`.
   paid APIs).
 - Prompt injection when the model also has tools, private data or an exfiltration
   channel.
-- Missing audit events for authentication, privilege and money changes — LOW.
+- Missing audit events for authentication, privilege and money changes —
+  `log.security-events`, LOW.
 - Fail-open: an exception, timeout or missing config that grants access or skips a
   check.

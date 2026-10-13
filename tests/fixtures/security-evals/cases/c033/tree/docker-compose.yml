@@ -1,0 +1,23 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.6.6
+    command: --model /models/small --api-key ${VLLM_API_KEY}
+    ports:
+      - "127.0.0.1:8000:8000"
+  postgres:
+    image: postgres:17.2
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  ollama:
+    image: ollama/ollama:0.5.7
+    environment:
+      OLLAMA_HOST: 0.0.0.0
+    ports:
+      - "11434:11434"
+  ray-head:
+    image: rayproject/ray:2.40.0
+    command: ray start --head --dashboard-host=0.0.0.0 --block
+    ports:
+      - "8265:8265"
+volumes:
+  pgdata: {}

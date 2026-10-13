@@ -1,0 +1,1 @@
+{ "name": "sso", "dependencies": { "@node-saml/node-saml": "5.0.0", "xml-crypto": "6.0.0", "xpath": "0.0.34", "@xmldom/xmldom": "0.8.10" } }

@@ -47,16 +47,19 @@ of callers and callees.
 
 | Changed | Check |
 |---|---|
-| route, handler, controller, resolver, server action, consumer, gRPC service | `backend-access.md` `authn.*` `authz.*` `logic.*` `webhook.inbound` `api.*`; `backend-taint.md` for its inputs |
+| route, handler, controller, resolver, server action, consumer, gRPC service | `backend-access.md` `authn.*` `authz.*` `logic.*` `log.security-events` `webhook.inbound` `api.*`; `backend-taint.md` for its inputs |
+| list or search endpoint, filter or query builder | `inj.orm-filter` `inj.sql` `inj.nosql` `parse.differential` |
+| SAML, SSO, signup, invite, email-change or org-join code | `authn.saml` `authn.oauth` `authn.identity` `authn.email-trust` `authn.reset` |
 | model, repository, query, migration, RLS or rules file, seed | `authz.bola` `authz.tenant` `authz.mass-assignment` `authz.baas` `authn.backdoor` `inj.sql` `leak.response` |
 | outbound HTTP, file, archive, XML, serialization, export, mail code | `ssrf` `file.*` `xml.xxe` `deser.unsafe` `inj.csv` `inj.email` |
 | crypto, token, password, API-key, identity code | `crypto.*` `authn.passwords` `authn.jwt` `authn.apikeys` `authn.identity` |
 | component, template, markdown rendering | `client.md` `xss.*` |
 | headers, cookies, CORS, CSRF, framework or dev-server config, extension manifest | `client.md` `hdr.*` `cookie.flags` `csrf` `cors` `next.config` `dev.server` `ext.browser` |
 | `*.tf`, CFN, Kubernetes, Helm, Dockerfile, compose, proxy, DNS, GitOps config | `infra.md`, the classes for that resource type |
-| `.github/workflows`, other CI files | `supply-chain.md` `cicd.*` |
-| manifests, lockfiles, `.npmrc`, `pip.conf`, wrappers, `.yarn/` | `supply-chain.md` `deps.*` |
-| LLM calls, prompts, tools, memory, `.mcp.json`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.vscode/`, `.devcontainer/`, `.envrc` | `ai.md` |
+| `.github/` (workflows, actions), other CI files, Atlantis config — whatever the diff size, read in full | `supply-chain.md` `cicd.*`; a new third-party action is a LEAD |
+| manifests, lockfiles, `.npmrc`, `pip.conf`, wrappers, `.yarn/`, `*.pth` | `supply-chain.md` `deps.*`; a new package name is a LEAD |
+| build files (`*.m4`, `configure*`, `CMakeLists.txt`, `Makefile`, `build.rs`, `setup.py`, gradle wrapper) | `build.tamper` `deps.toolchain` |
+| LLM calls, prompts, tools, memory, `.mcp.json`, `.claude/`, `CLAUDE.md`, `AGENTS.md`, `.vscode/`, `.devcontainer/`, `.envrc`, `.gitmodules` — read in full | `ai.md` (`agent.settings` for settings files) |
 | a path under `vendor/` or `third_party/` | every checklist for its language, flagged `modified vendored code` |
 | scanner config, ignore file, or an added inline skip | `scan.suppressions` — always FAIL |
 | `.claude/security-suppressions.json` | always FAIL: `suppressions changed · needs security owner approval` |

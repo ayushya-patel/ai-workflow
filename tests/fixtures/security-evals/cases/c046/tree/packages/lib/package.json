@@ -1,0 +1,7 @@
+{
+  "name": "acme-lib",
+  "version": "1.0.0",
+  "dependencies": {
+    "internal-lib": "git+https://github.com/acme/internal-lib.git#4f2a9c1d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f"
+  }
+}

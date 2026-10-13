@@ -27,8 +27,17 @@ Shared by `security-backend`, `security-injection`, `security-client`, `security
    - `Grep` in `files_with_matches` or `count` mode, and `Glob`.
    - Read-only `git`: `log`, `ls-files`, `rev-parse`, `show --stat`.
 
-   The guard blocks everything else; change approach rather than retry. Never `Read` a
-   window containing a `redact-lines` entry; use `audit.mjs show` instead.
+   The guard blocks everything else; change approach rather than retry. Calls that pass
+   first time:
+   - run from the repo root; never `cd`. Every helper call starts with
+     `node <plugin>/scripts/security/audit.mjs`;
+   - single-quote patterns and paths; no `$`, backticks, `(` outside quotes, redirects
+     or pipes into `sed`/`awk`. In patterns write `[(]`, `[.]`, `[$]`;
+   - `audit.mjs grep` takes only `-i`, `--max N`, `--diff [base]` and `-- <pathspec>`; it
+     refuses anything else (no `-A`, `--glob`). For context, `audit.mjs show <path> <from> <to>`,
+     one range per call;
+   - `Read` with `offset`/`limit` that skip any `redact-lines` entry, or
+     `audit.mjs show` for those lines.
 3. **Sweep.**
    - Run each class's Detect pattern through
      `audit.mjs grep '<ERE>' [--diff <base>] -- <scope>`. Its `TOTAL` is the denominator.
@@ -37,6 +46,8 @@ Shared by `security-backend`, `security-injection`, `security-client`, `security
    - Zero hits is `clean` only with the reason (no XML parser in the lockfile, no
      outbound HTTP client).
    - Logic classes name the files read.
+   - Map every entry point in your scope (route, server action, consumer, webhook,
+     workflow job, LLM tool, MCP tool) and record whether you traced it.
 4. **Before returning a candidate:**
    1. Re-read the cited lines this run; quote evidence verbatim from `Read` or masked
       output.
@@ -53,6 +64,7 @@ Shared by `security-backend`, `security-injection`, `security-client`, `security
 6. **Return:**
    - candidate blocks;
    - one COVERAGE line per rule id in your checklist;
+   - one ENTRY line per entry point in your scope;
    - LEAD lines;
    - at most 3 `Setup feedback: <lesson>` lines about the audit itself (a checklist
      gap, a misleading Detect pattern, the guard blocking a legitimate step, a helper or
@@ -110,10 +122,11 @@ reads it.
 
 ## Coverage and leads
 
-One COVERAGE line per rule id in the checklist:
+One COVERAGE line per rule id in the checklist. A count is reproducible only with its
+source: give the exact `audit.mjs grep …` command whose `TOTAL` it is, or the site list.
 
 ~~~
-COVERAGE <rule-id> · clean (<pattern or method> · <hits> hits · <read> read)
+COVERAGE <rule-id> · clean (<exact command or site list> · <hits> hits · <read> read)
 COVERAGE <rule-id> · partial (<read> of <hits> read · <why>)
 COVERAGE <rule-id> · C1, C4
 COVERAGE <rule-id> · N/A — <why>
@@ -125,6 +138,7 @@ COVERAGE <rule-id> · not checked — <why>
 
 ~~~
 LEAD <tool:rule | pattern | inventory line> · <path:line> · <why not promoted>
+ENTRY <METHOD /route | action | consumer | workflow:job | tool> · <path:line> · traced (<rule ids checked>) | untraced (<cap | budget | dynamic routing | …>)
 ~~~
 
 ## Report
@@ -134,7 +148,10 @@ CONFIDENTIAL — unfixed vulnerability details. Share only through a private sec
 
 # Security audit — <repo> @ <short sha>
 Mode: full | diff <base>…worktree | path <p> · Date: <ISO> · Surfaces: <run> · Network: off|on
-Preflight: clean | ASK — <user's answer> · Tools: <installed> · Not installed: <…> · Skipped: <…>
+Preflight: clean | ASK — <user's answer> · Layers: <the preflight LAYERS line> · Skipped: <…>
+
+## Suspected compromise
+<only when an IOC or exfiltration finding is CONFIRMED: SA-id · what · rotate every repo, org and environment secret, then purge caches and remove unknown runners — before anything below>
 
 ## Threat model
 Crown jewels: …
@@ -144,6 +161,7 @@ Entry points: <n> routes (<n> anonymous) · <n> server actions · <n> consumers 
 
 ## Summary
 CRITICAL n · HIGH n · MEDIUM n · LOW n · HARDENING n · chains n · dropped n · suppressed n
+Entry points traced: <N>/<M> (anonymous <a>/<b>) · untraced: <ENTRY targets and why, or none>
 
 | ID | Severity | Confidence | Target | Title |
 |---|---|---|---|---|
@@ -167,7 +185,11 @@ Break first: <cheapest hop> — <its fix>
 |---|---|---|---|---|---|---|
 <COVERAGE lines, grouped by surface>
 Excluded: <globs and why>
-Not audited: <UNCLASSIFIED and BINARY counts, native code without a checklist pass, LFS, submodules, symlinks out of the root>
+Not audited: <UNCLASSIFIED and BINARY counts, NOT-UTF8 binaries, TOO-LARGE files, native code without a checklist pass, LFS, submodules, symlinks out of the root>
+High-blast components: <name@version · scan: ids | none | not checked — needs --network>
+
+## Verify outside the repo
+<only the ones that apply: org SHA-pinning policy · rulesets and branch protection on every branch · trusted-publisher workflow + environment binding · fork-PR approval · whether Actions may approve PRs · self-hosted runner registrations · collaborators, deploy keys and OAuth apps · Actions cache contents · CI webhook config not in IaC · CSP and egress allowlist domain ownership>
 
 ## Suppressions
 Applied: <SA-id · rule · path · owner · expires · file last changed in <sha>>
@@ -175,12 +197,23 @@ Not applied: <SA-id · invalid | expired | added or changed in this diff>
 
 ## Drop log
 evidence mismatch n · no attacker-controlled source n · control present n · unreachable n · excluded class n · duplicate n
+DROP C<n> <rule-id> <path:line> · <reason> [· control <path:line>]
 
-Verdict: BLOCK | FIX-SOON | PASS — <counts> [incomplete: <surfaces>]
+Verdict: BLOCK | FIX-SOON | PASS — <counts> [incomplete: <surfaces | entry points>]
+Fix first: <SA-id or SC-id> — <one line: the cheapest hop of the worst chain, else the CONFIRMED finding with the highest E×I and widest blast radius>
 
 Secrets listed here need rotation before any history rewrite or disclosure.
 Do not fix anything here; the caller decides.
+
+Restore coverage (printed only when a layer is BROKEN or MISSING; suggestions, never run by the audit):
+<the preflight RESTORE lines>
 ~~~
+
+The `### SA-…`, `Rule:`, `Target:`, `Locations:`, `[LOW|HARDENING] SA-…`, `### SC-…`,
+`Path:`, `COVERAGE`, `Entry points traced:`, `Verdict:` and `Fix first:` shapes are the
+contract `scripts/security/eval.mjs score` parses: keep them stable. Only `Target:` and
+`Locations:` place a finding; a stale-branch finding names its branch there, a
+history finding its file.
 
 ## Verify lines (`ai-workflow:security-reviewer`)
 

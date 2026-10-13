@@ -13,7 +13,8 @@ dispatches them.
 | `law/` | `constitution.md`, `definition-of-done.md`, `engineering-discipline.md` |
 | `templates/` | `specs/_template/` (spec, plan, tasks, contracts/provides+requires, changes/), `adr.md`, `delivery-note.md`, `handoff.md`, `learnings.md`, `security-report.md` |
 | `scripts/pipeline/` | Plain Node (builtins only, no dependency): `cli-waves.mjs <module-dir>` prints a task list's parallel waves, `cli-brief.mjs <module-dir> <task-id>` prints one task's context for its implementer. Deterministic, no model call — see [The task pipeline](#the-task-pipeline) |
-| `scripts/security/audit.mjs` | Plain Node (builtins only) for `/security-audit`: preflight, inventory, masked grep/show/diff/render, redacted secret and hidden-Unicode sweeps, installed scanners run offline and projected to `rule · path:line`, stable IDs |
+| `scripts/security/audit.mjs` | Plain Node (builtins only) for `/security-audit`: preflight (scanner smoke test), inventory (IOCs, agent-case), masked grep/show/diff/render, redacted secret and hidden-Unicode sweeps, other-branch workflow listing, installed scanners run offline and projected to `rule · path:line`, stable IDs |
+| `scripts/security/eval.mjs` | The audit's eval harness: `materialize` builds the planted-vuln/decoy corpus into throwaway git repos, `score` grades a saved report against `tests/fixtures/security-evals/ground-truth.json` |
 | `ci/check-process.sh` | CI gate: no application code without a spec touched (Article I), no new runtime dependency without an ADR (Article IV) |
 | `tests/` | Self-checks: `bash tests/test-guard-new-code.sh`, `bash tests/test-check-process.sh`, and the Node tests (pipeline scripts, security helper and guard), `node --test tests/*.test.mjs` |
 
@@ -150,7 +151,9 @@ Each finding carries:
 - a code-level fix with out-of-band steps;
 - a regression test.
 
-Every rule id in the coverage matrix ends up clean (with its evidence), partial, a finding, N/A, or not checked with a reason.
+Every rule id in the coverage matrix ends up clean (with its evidence), partial, a finding, N/A, or not checked with a reason. Preflight smoke-tests each scanner (ok / BROKEN / MISSING), and a degraded layer never reads as clean. Known compromise indicators (IOCs) open the report; workflow and local-action files on other branches are scanned for stale-branch pwn requests; the report carries an entry-point ledger, a "fix first" line, and a "verify outside the repo" list.
+
+The audit is measured against itself. `scripts/security/eval.mjs` materializes a corpus of planted vulnerabilities and safe decoys (`tests/fixtures/security-evals/`, intentionally vulnerable — never deploy them) into throwaway git repos, then scores a saved report against ground truth: recall, precision, per-class, decoy false positives, chains, and secret leaks. See that directory's README to run it. Once a first K=3 run records `baseline.json` (it is 0/0 today, so the regression gate is not live yet), a checklist change must not drop the score below it.
 
 Safety (`skills/security-audit/law.md`, enforced on every security agent by `hooks/guard-audit.mjs`):
 - **No secret is ever printed.** Secrets show as type, place, a 4-character prefix and the length only. Files holding secret-format values can only be read masked.

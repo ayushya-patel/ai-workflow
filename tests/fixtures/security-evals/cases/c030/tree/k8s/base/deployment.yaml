@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  template:
+    spec:
+      serviceAccountName: api
+      containers:
+        - name: api
+          image: registry.example.com/api@sha256:3b4f0c2a1e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false

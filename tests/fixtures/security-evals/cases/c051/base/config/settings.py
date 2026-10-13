@@ -1,0 +1,2 @@
+GITHUB_API = "https://api.github.com"
+GITHUB_TOKEN = "{{SECRET:github}}"

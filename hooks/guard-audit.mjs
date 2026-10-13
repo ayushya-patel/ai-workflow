@@ -7,7 +7,7 @@
 // can't parse is blocked.
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs"
 import path from "node:path"
-import { PLUGIN_ROOT, findSecrets, isSecretFile } from "../scripts/security/audit.mjs"
+import { PLUGIN_ROOT, isSecretFile, secretLineNumbers } from "../scripts/security/audit.mjs"
 import { projectRoot, readInput } from "./lib.mjs"
 
 const real = (p) => {
@@ -35,7 +35,9 @@ const rel = (p) => path.relative(root, p).split(path.sep).join("/")
 
 // A path the audit may touch: inside the repo or the plugin, never a secret file, never an
 // impostor law or checklist planted in the audited repo.
-function checkPath(p, { content = false, meta = false } = {}) {
+// `window` limits the secret check to the lines a Read will return, so a large file with one
+// label-like hit can still be read around it. PEM bodies count as secret lines.
+function checkPath(p, { content = false, meta = false, window = null } = {}) {
   if (/^~/.test(p)) block(`${p}: nothing outside the repo`)
   const r = real(path.resolve(cwd, p))
   if (["/dev/null", "/dev/stdout", "/dev/stderr"].includes(r)) return r
@@ -44,13 +46,15 @@ function checkPath(p, { content = false, meta = false } = {}) {
   if (/(^|\/)(skills\/security-audit\/|templates\/security-report\.md$)/.test(rel(r)))
     block(`${p} is the audited repo's copy. Load the plugin's: ${plugin}/${rel(r).replace(/^.*?(skills\/|templates\/)/, "$1")}`)
   if (!meta && isSecretFile(rel(r))) block(`${p} is a secret file: report it by path, never read it`)
-  if (content && existsSync(r) && lstatSync(r).isFile() && lstatSync(r).size < 4 << 20) {
+  if (content && existsSync(r) && lstatSync(r).isFile() && lstatSync(r).size < 32 << 20) {
     const buf = readFileSync(r)
     if (!buf.subarray(0, 8000).includes(0)) {
-      const lines = []
-      buf.toString("utf8").split("\n").forEach((l, i) => findSecrets(l).some((h) => !h.placeholder) && lines.push(i + 1))
-      if (lines.length)
-        block(`${p} holds secret-format values at lines ${lines.slice(0, 10).join(",")}. Read it masked: node ${AUDIT} show '${rel(r)}' [from to]`)
+      const lines = secretLineNumbers(buf.toString("utf8"))
+      const hit = lines.filter((n) => !window || (n >= window[0] && n <= window[1]))
+      if (hit.length)
+        block(
+          `${p} holds secret-format values at lines ${hit.slice(0, 10).join(",")}. Read around them (Read offset/limit that skip those lines) or masked: node ${AUDIT} show '${rel(r)}' <from> <to>`,
+        )
     }
   }
   return r
@@ -59,7 +63,15 @@ function checkPath(p, { content = false, meta = false } = {}) {
 if (["Edit", "Write", "MultiEdit", "NotebookEdit"].includes(tool)) block("no edits; fixes are proposed, never applied")
 if (["WebFetch", "WebSearch", "Artifact"].includes(tool) || tool.startsWith("mcp__"))
   block(`${tool}: nothing leaves the machine during an audit; the report is printed here only`)
-if (tool === "Read" || tool === "NotebookRead") checkPath(ti.file_path ?? ti.notebook_path ?? "", { content: true })
+if (tool === "Read" || tool === "NotebookRead") {
+  // A window only with an explicit positive limit, no allow_large, and not a notebook (rendered
+  // as cells, so offsets are not raw lines). Padded a line each side for 0- vs 1-based offsets.
+  const p = ti.file_path ?? ti.notebook_path ?? ""
+  const from = Math.max(1, Number(ti.offset) || 1)
+  const lim = Number(ti.limit)
+  const windowed = tool === "Read" && lim >= 1 && ti.allow_large !== true && !/\.ipynb$/i.test(p)
+  checkPath(p, { content: true, window: windowed ? [from - 1, from + lim] : null })
+}
 if (tool === "Glob") checkPath(ti.path ?? ".")
 if (tool === "Grep") {
   checkPath(ti.path ?? ".")
